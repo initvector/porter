@@ -11,7 +11,17 @@
 
 $Supported['ipb'] = array('name' => 'IP.Board 3', 'prefix' => 'ibf_'); // IPB
 $Supported['ipb']['CommandLine'] = array(
-    'avatarpath' => array('Full path of source avatars to process.', 'Sx' => ':', 'Field' => 'avatarpath'),
+    'avatarpath' => array(
+        'Full path of source avatars to process.',
+        'Sx' => ':',
+        'Field' => 'avatarpath'
+    ),
+    'attachmentpath' => array(
+        'Full path of source attachments to rename.',
+        'Sx' => ':',
+        'Field' => 'attachmentpath'
+
+    ),
     'source' => array(
         'Source user table: profile_portal (default) or member_extra.',
         'Sx' => ':',
@@ -159,6 +169,85 @@ class IPB extends ExportController {
 
         echo "Completed: {$Completed}\n";
         echo "Skipped: {$Skipped}\n";
+    }
+
+    /**
+     * Rename *.ipb attachments to use real filename
+     *
+     * @return bool
+     */
+    protected function DoMedia() {
+        $AttachmentDir = $this->Param('attachmentpath');
+
+        if (empty($AttachmentDir)) {
+            return false;
+        }
+
+        if (is_dir($AttachmentDir)) {
+            $AttachmentDir = realpath($AttachmentDir);
+            $Ex = $this->Ex;
+            $MissingFiles = array();
+
+            $AttachmentsResult = $Ex->Query("select attach_id, attach_file, attach_location
+                from :_attachments
+                where attach_location like '%.ipb'", true);
+            while ($Attachment = mysql_fetch_assoc($AttachmentsResult)) {
+                $OrigLocation = $Attachment['attach_location'];
+                $SanitizedFilename = preg_replace(
+                    '#([^\w\s\d\-_~,;:\[\]\(\).])#',
+                    '_',
+                    $Attachment['attach_file']
+                );
+                $SanitizedFilename = preg_replace('#\.{2,}#', '', $SanitizedFilename);
+                $SanitizedFilename = preg_replace('#_{2,}#', '_', $SanitizedFilename);
+
+                $NewLocation = preg_replace(
+                    '#[^\\/]+\.ipb$#',
+                    $SanitizedFilename,
+                    $OrigLocation
+                );
+
+                $AttachmentFullPath = $AttachmentDir.DIRECTORY_SEPARATOR.$OrigLocation;
+                if (file_exists($AttachmentFullPath)) {
+                    echo "File exists!\n";
+                    $AttachmentNewPath = $AttachmentDir.DIRECTORY_SEPARATOR.$NewLocation;
+
+                    if (rename($AttachmentFullPath, $AttachmentNewPath)) {
+                        echo "Renamed $AttachmentFullPath to $AttachmentNewPath\n";
+                        $UpdateResult = $Ex->Query(
+                            sprintf(
+                                "update :_attachments set attach_location='%s' where attach_id='%d' limit 1",
+                                mysql_real_escape_string($NewLocation),
+                                $Attachment['attach_id']
+                            ),
+                            true
+                        );
+
+                        if (!$UpdateResult) {
+                            trigger_error("Unable to update attachment record {$Attachment['attach_id']}", E_USER_WARNING);
+                        }
+
+                        unset($UpdateResult);
+                    } else {
+                        trigger_error("Unable to rename $AttachmentFullPath", E_USER_WARNING);
+                    }
+                } else {
+                    $MissingFiles[] = $AttachmentFullPath;
+                }
+            }
+
+            if (count($MissingFiles)) {
+                echo "Missing attachments:\n";
+                foreach ($MissingFiles as $CurrentFile) {
+                    echo "$CurrentFile\n";
+                }
+                unset($CurrentFile);
+            }
+        } else {
+            trigger_error("Attachment path does not exist.", E_USER_ERROR);
+        }
+
+        return true;
     }
 
     /**
@@ -494,6 +583,8 @@ class IPB extends ExportController {
         $Ex->ExportTable('Comment', $Sql, $Comment_Map);
 
         // Media.
+        $this->DoMedia();
+
         $Media_Map = array(
             'attach_id' => 'MediaID',
             'atype_mimetype' => 'Type',
