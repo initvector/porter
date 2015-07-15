@@ -1,4 +1,8 @@
 <?php
+namespace Garden\Porter\Package;
+
+use \Garden\Porter\ExportModel;
+
 /**
  * @copyright Vanilla Forums Inc. 2010-2015
  * @license http://opensource.org/licenses/gpl-2.0.php GNU GPL2
@@ -8,7 +12,7 @@
 /**
  * Generic controller implemented by forum-specific ones.
  */
-abstract class ExportController {
+abstract class Base {
 
     /** @var array Database connection info */
     protected $DbInfo = array();
@@ -19,23 +23,21 @@ abstract class ExportController {
     /** @var ExportModel */
     protected $Ex = null;
 
+    protected $frontend;
+
+    protected $name;
+
+    protected $prefix;
+
     /** Forum-specific export routine */
     abstract protected function ForumExport($Ex);
 
     /**
      * Construct and set the controller's properties from the posted form.
      */
-    public function __construct() {
-        $this->HandleInfoForm();
-
-        $this->Ex = new ExportModel;
-        $this->Ex->Controller = $this;
-        $this->Ex->SetConnection($this->DbInfo['dbhost'], $this->DbInfo['dbuser'], $this->DbInfo['dbpass'],
-            $this->DbInfo['dbname']);
-        $this->Ex->Prefix = $this->DbInfo['prefix'];
-        $this->Ex->Destination = $this->Param('dest', 'file');
-        $this->Ex->DestDb = $this->Param('destdb', null);
-        $this->Ex->TestMode = $this->Param('test', false);
+    public function __construct($frontend, $ex) {
+        $ex->Controller = $this;
+        $ex->Prefix = $frontend->getOpt('prefix');
 
         /**
          * Selective exports
@@ -44,7 +46,7 @@ abstract class ExportController {
          * 3. Normalize case to lower
          * 4. Save to the ExportModel instance
          */
-        $RestrictedTables = $this->Param('tables', false);
+        $RestrictedTables = $frontend->getOpt('tables', false);
         if (!empty($RestrictedTables)) {
             $RestrictedTables = explode(',', $RestrictedTables);
 
@@ -52,9 +54,11 @@ abstract class ExportController {
                 $RestrictedTables = array_map('trim', $RestrictedTables);
                 $RestrictedTables = array_map('strtolower', $RestrictedTables);
 
-                $this->Ex->RestrictedTables = $RestrictedTables;
+                $ex->RestrictedTables = $RestrictedTables;
             }
         }
+
+        $this->Ex = $ex;
     }
 
     /**
@@ -75,10 +79,8 @@ abstract class ExportController {
      * Logic for export process.
      */
     public function DoExport() {
-        global $Supported;
-
         // Test connection
-        $Msg = $this->TestDatabase();
+        $Msg = $this->Ex->TestDatabase();
         if ($Msg === true) {
 
             // Test src tables' existence structure
@@ -86,24 +88,32 @@ abstract class ExportController {
             if ($Msg === true) {
                 // Good src tables - Start dump
                 $this->Ex->UseCompression(true);
-                $this->Ex->FilenamePrefix = $this->DbInfo['dbname'];
                 set_time_limit(60 * 60);
 
-//            ob_start();
                 $this->ForumExport($this->Ex);
-//            $Errors = ob_get_clean();
-
-                $Msg = $this->Ex->Comments;
 
                 // Write the results.  Send no path if we don't know where it went.
-                $RelativePath = ($this->Param('destpath', false)) ? false : $this->Ex->Path;
-                ViewExportResult($Msg, 'Info', $RelativePath);
-            } else {
-                ViewForm(array('Supported' => $Supported, 'Msg' => $Msg, 'Info' => $this->DbInfo));
-            } // Back to form with error
-        } else {
-            ViewForm(array('Supported' => $Supported, 'Msg' => $Msg, 'Info' => $this->DbInfo));
-        } // Back to form with error
+                if ($this->Param('destpath', false)) {
+                    $destination = false;
+                } else {
+                    $destination = $this->Ex->Path;
+                }
+                return array(
+                    'comments' => $this->Ex->Comments,
+                    'file' => $destination
+                );
+            }
+        }
+
+        return false;
+    }
+
+    public function getName() {
+        return $this->name;
+    }
+
+    public function getPrefix() {
+        return $this->prefix;
     }
 
     /**
@@ -136,31 +146,4 @@ abstract class ExportController {
             return $Default;
         }
     }
-
-    /**
-     * Test database connection info.
-     *
-     * @return string|bool True on success, message on failure.
-     */
-    public function TestDatabase() {
-        // Connection
-        if (!function_exists('mysql_connect')) {
-            $Result = 'mysql_connect is an undefined function.  Verify MySQL extension is installed and enabled.';
-        } elseif ($C = @mysql_connect($this->DbInfo['dbhost'], $this->DbInfo['dbuser'], $this->DbInfo['dbpass'])) {
-            // Database
-            if (mysql_select_db($this->DbInfo['dbname'], $C)) {
-                mysql_close($C);
-                $Result = true;
-            } else {
-                mysql_close($C);
-                $Result = "Could not find database '{$this->DbInfo['dbname']}'.";
-            }
-        } else {
-            $Result = 'Could not connect to ' . $this->DbInfo['dbhost'] . ' as ' . $this->DbInfo['dbuser'] . ' with given password.';
-        }
-
-        return $Result;
-    }
 }
-
-?>

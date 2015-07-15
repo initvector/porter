@@ -1,4 +1,8 @@
 <?php
+namespace Garden\Porter\Package;
+
+use \Garden\Porter\ExportModel;
+
 /**
  * vBulletin exporter tool.
  *
@@ -31,40 +35,12 @@
  * @package VanillaPorter
  */
 
-$Supported['vbulletin'] = array('name' => 'vBulletin 3 & 4', 'prefix' => 'vb_');
-// Commented commands are still supported, if you really want to use them.
-$Supported['vbulletin']['CommandLine'] = array(
-    //'noexport' => array('Exports only the blobs.', 'Sx' => '::'),
-    'mindate' => array('A date to import from. Like selective amnesia.'),
-    //'forumid' => array('Only export 1 forum'),
-    //'ipbanlist' => array('Export IP ban list, which is a terrible idea.'),
-    'filepath' => array('Full path of file attachments to be renamed.', 'Sx' => '::')
-);
-$Supported['vbulletin']['features'] = array(
-    'Comments' => 1,
-    'Discussions' => 1,
-    'Users' => 1,
-    'Categories' => 1,
-    'Roles' => 1,
-    'Avatars' => 1,
-    'Attachments' => 1,
-    'PrivateMessages' => 1,
-    'Permissions' => 1,
-    'UserWall' => 1,
-    'UserNotes' => 1,
-    'Bookmarks' => 1,
-    'Passwords' => 1,
-    'Signatures' => 1,
-    'Ranks' => 1,
-    'Polls' => 1,
-);
-
 /**
  * vBulletin-specific extension of generic ExportController.
  *
  * @package VanillaPorter
  */
-class Vbulletin extends ExportController {
+class VBulletin extends Base {
     /* @var string SQL fragment to build new path to attachments. */
     public $AttachSelect = "concat('/vbulletin/', left(f.filehash, 2), '/', f.filehash, '_', a.attachmentid,'.', f.extension) as Path";
 
@@ -75,9 +51,10 @@ class Vbulletin extends ExportController {
       else null
       end as customphoto";
 
+    protected $name = 'vBulletin 3 & 4';
+
     /* @var array Default permissions to map. */
     static $Permissions = array(
-
         'genericpermissions' => array(
             1 => array('Garden.Profiles.View', 'Garden.Activity.View'),
             2 => 'Garden.Profiles.Edit',
@@ -113,29 +90,18 @@ class Vbulletin extends ExportController {
                 'Garden.Messages.Manage',
                 'Vanilla.Spam.Manage'
             )
-//          4 => 'Garden.Settings.Manage',),
-        ),
-//      'wolpermissions' => array(
-//          16 => 'Plugins.WhosOnline.ViewHidden')
+        )
     );
 
     static $Permissions2 = array();
 
+    protected $prefix = 'vb_';
+
     /** @var array Required tables => columns. Commented values are optional. */
     protected $SourceTables = array(
-        //'attachment'
-        //'contenttype'
-        //'customavatar'
         'deletionlog' => array('type', 'primaryid'),
-        //'filedata'
         'forum' => array('forumid', 'description', 'displayorder', 'title', 'description', 'displayorder'),
-        //'phrase' => array('varname','text','product','fieldname','varname'),
-        //'pm'
-        //'pmgroup'
-        //'pmreceipt'
-        //'pmtext'
         'post' => array('postid', 'threadid', 'pagetext', 'userid', 'dateline', 'visible'),
-        //'setting'
         'subscribethread' => array('userid', 'threadid'),
         'thread' => array(
             'threadid',
@@ -148,7 +114,6 @@ class Vbulletin extends ExportController {
             'lastpost',
             'visible'
         ),
-        //'threadread'
         'user' => array(
             'userid',
             'username',
@@ -174,10 +139,8 @@ class Vbulletin extends ExportController {
             'styleid',
             'avatarid'
         ),
-        //'userban'
         'userfield' => array('userid'),
-        'usergroup' => array('usergroupid', 'title', 'description'),
-        //'visitormessage'
+        'usergroup' => array('usergroupid', 'title', 'description')
     );
 
     /**
@@ -422,7 +385,7 @@ class Vbulletin extends ExportController {
         $Category_Map = array(
             'forumid' => 'CategoryID',
             'description' => 'Description',
-            'Name2' => array('Column' => 'Name', 'Filter' => 'HTMLDecoder'),
+            'Name2' => array('Column' => 'Name', 'Filter' => array('Garden\\Porter\\Filter', 'HTMLDecoder')),
             'displayorder' => array('Column' => 'Sort', 'Type' => 'int'),
             'parentid' => 'ParentCategoryID'
         );
@@ -457,7 +420,7 @@ class Vbulletin extends ExportController {
             'forumid' => 'CategoryID',
             'postuserid' => 'InsertUserID',
             'postuserid2' => 'UpdateUserID',
-            'title' => array('Column' => 'Name', 'Filter' => 'HTMLDecoder'),
+            'title' => array('Column' => 'Name', 'Filter' => array('Garden\\Porter\\Filter', 'HTMLDecoder')),
             'Format' => 'Format',
             'views' => 'CountViews',
             'ipaddress' => 'InsertIPAddress'
@@ -1055,7 +1018,7 @@ class Vbulletin extends ExportController {
             'question' => 'Name',
             'threadid' => 'DiscussionID',
             'anonymous' => 'Anonymous',
-            'dateline' => array('Column' => 'DateInserted', 'Filter' => 'TimestampToDate'),
+            'dateline' => array('Column' => 'DateInserted', 'Filter' => array('Garden\\Porter\\Filter', 'TimestampToDate')),
             'postuserid' => 'InsertUserID'
         );
         $Ex->ExportTable('Poll',
@@ -1073,7 +1036,7 @@ class Vbulletin extends ExportController {
             'pollid' => 'PollID',
             'body' => 'Body', // calc
             'sort' => 'Sort', // calc
-            'dateline' => array('Column' => 'DateInserted', 'Filter' => 'TimestampToDate'),
+            'dateline' => array('Column' => 'DateInserted', 'Filter' => array('Garden\\Porter\\Filter', 'TimestampToDate')),
             'postuserid' => 'InsertUserID'
         );
         $Sql = "select
@@ -1112,7 +1075,7 @@ class Vbulletin extends ExportController {
         $PollVote_Map = array(
             'userid' => 'UserID',
             'optionid' => 'PollOptionID',
-            'votedate' => array('Column' => 'DateInserted', 'Filter' => 'TimestampToDate')
+            'votedate' => array('Column' => 'DateInserted', 'Filter' => array('Garden\\Porter\\Filter', 'TimestampToDate'))
         );
         $Ex->ExportTable('PollVote',
             "select pv.*, pollid * 1000 + voteoption as optionid
@@ -1300,6 +1263,34 @@ class Vbulletin extends ExportController {
         }
         self::$Permissions2 = $Permissions2;
     }
-}
 
-?>
+    public function getSupported() {
+        return array(
+            'CommandLine' => array(
+                //'noexport' => array('Exports only the blobs.', 'Sx' => '::'),
+                'mindate' => array('A date to import from. Like selective amnesia.'),
+                //'forumid' => array('Only export 1 forum'),
+                //'ipbanlist' => array('Export IP ban list, which is a terrible idea.'),
+                'filepath' => array('Full path of file attachments to be renamed.', 'Sx' => '::')
+            ),
+            'features' => array(
+                'Comments' => 1,
+                'Discussions' => 1,
+                'Users' => 1,
+                'Categories' => 1,
+                'Roles' => 1,
+                'Avatars' => 1,
+                'Attachments' => 1,
+                'PrivateMessages' => 1,
+                'Permissions' => 1,
+                'UserWall' => 1,
+                'UserNotes' => 1,
+                'Bookmarks' => 1,
+                'Passwords' => 1,
+                'Signatures' => 1,
+                'Ranks' => 1,
+                'Polls' => 1
+            )
+        );
+    }
+}

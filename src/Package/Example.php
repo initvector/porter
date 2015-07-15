@@ -1,4 +1,6 @@
 <?php
+namespace Garden\Porter\Package;
+
 /**
  * SampleName exporter tool.
  *

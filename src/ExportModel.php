@@ -1,4 +1,6 @@
 <?php
+namespace Garden\Porter;
+
 /**
  * @copyright Vanilla Forums Inc. 2010-2015
  * @license http://opensource.org/licenses/gpl-2.0.php GNU GPL2
@@ -111,7 +113,7 @@ class ExportModel {
     /**
      * Setup.
      */
-    public function __construct() {
+    public function __construct($frontend) {
         self::$Mb = function_exists('mb_detect_encoding');
 
         // Set the search and replace to escape strings.
@@ -124,7 +126,9 @@ class ExportModel {
         );
 
         // Load structure.
-        $this->_Structures = VanillaStructure();
+        $this->_Structures = Structure::getStructure();
+
+        $this->frontend = $frontend;
     }
 
     /**
@@ -196,12 +200,9 @@ class ExportModel {
                 $Message) . self::NEWLINE;
 
         fwrite($this->File, $Comment);
+
         if ($Echo) {
-            if (defined('CONSOLE')) {
-                echo $Comment;
-            } else {
-                $this->Comments[] = $Message;
-            }
+            $this->frontend->doOutput($Message);
         }
     }
 
@@ -1261,7 +1262,7 @@ class ExportModel {
      * @return string
      */
     public function Version() {
-        return APPLICATION_VERSION;
+        return '2.2';
     }
 
     /**
@@ -1517,6 +1518,24 @@ class ExportModel {
     public static function FileExtension($ColumnName) {
         return "right($ColumnName, instr(reverse($ColumnName), '.'))";
     }
-}
 
-?>
+    public function TestDatabase() {
+        // Connection
+        if (!function_exists('mysql_connect')) {
+            $Result = 'mysql_connect is an undefined function.  Verify MySQL extension is installed and enabled.';
+        } elseif ($C = @mysql_connect($this->_Host, $this->_Username, $this->_Password)) {
+            // Database
+            if (mysql_select_db($this->_DbName, $C)) {
+                mysql_close($C);
+                $Result = true;
+            } else {
+                mysql_close($C);
+                $Result = "Could not find database '{$this->_DbName}'.";
+            }
+        } else {
+            $Result = "Could not connect to {$this->_Host} as {$this->_Username} with given password.";
+        }
+
+        return $Result;
+    }
+}
